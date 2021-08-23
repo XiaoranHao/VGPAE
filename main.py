@@ -15,9 +15,9 @@ parser.add_argument('--dataset', type=str, default='MNIST',
 parser.add_argument('--actif', type=str, default='lrelu', metavar='Activation',
                     help='activation function (default: LeakyRelu)')
 parser.add_argument('--latent_dim1', type=int, default=2, metavar='N',
-                    help='dimension of z1 space (default: 2)')
+                    help='dimension of z1 space (default: 5)')
 parser.add_argument('--latent_dim2', type=int, default=2, metavar='N',
-                    help='dimension of z2 space (default: 2)')
+                    help='dimension of z2 space (default: 5)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
     # initialize model
     in_channel = 1
-    model = VGPAE.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun)
+    model = VGPAE.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=28)
 
     file_name = args.dataset + '_' + model.__class__.__name__ + '_' + \
                 str(args.latent_dim1) + '_' + str(args.latent_dim2)
@@ -53,5 +53,5 @@ if __name__ == '__main__':
     model = model.to(device)
 
     start_time = time.time()
-    train(model, train_loader, args.epochs, device, file_name)
+    train(model, train_loader, args.epochs, device, file_name, 0)
     print('training time elapsed {}s'.format(time.time() - start_time))

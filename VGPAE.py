@@ -5,6 +5,7 @@ from torch.nn import functional as F
 from torch.distributions import Normal, MultivariateNormal, kl, kl_divergence, Independent
 import gpytorch
 from gpytorch.kernels import ScaleKernel
+import math
 
 
 class VGPAE(BaseVAE):
@@ -22,13 +23,13 @@ class VGPAE(BaseVAE):
 
         self.latent_dim1 = latent_dim1
         self.latent_dim2 = latent_dim2
-
+        self.img_size = img_size
         self.in_channels = in_channels
         modules = []
         if hidden_dims is None:
             hidden_dims = [64, 128, 256, 512]
-        self.last_layer_size = int(img_size / (2 ** len(hidden_dims))) ** 2
-        self.last_layer_width = int(img_size / (2 ** len(hidden_dims)))
+        self.last_layer_size = math.ceil(img_size / (2 ** len(hidden_dims))) ** 2
+        self.last_layer_width = math.ceil(img_size / (2 ** len(hidden_dims)))
         self.last_h_dim = hidden_dims[-1]
 
         # Build Encoder
@@ -56,8 +57,12 @@ class VGPAE(BaseVAE):
         hidden_dims.reverse()
 
         for i in range(len(hidden_dims) - 1):
-            modules.append(convt_block(hidden_dims[i], hidden_dims[i + 1], activation,
-                                       kernel_size=3, stride=2, padding=1, output_padding=1))
+            if self.img_size == 28 and i == 1:
+                modules.append(convt_block(hidden_dims[i], hidden_dims[i + 1], activation,
+                                           kernel_size=3, stride=2, padding=1, output_padding=0))
+            else:
+                modules.append(convt_block(hidden_dims[i], hidden_dims[i + 1], activation,
+                                           kernel_size=3, stride=2, padding=1, output_padding=1))
 
         self.decoder = nn.Sequential(*modules)
         self.final_layer = nn.Sequential(
@@ -117,7 +122,6 @@ class VGPAE(BaseVAE):
 
         result = self.encoder(input)
         result = torch.flatten(result, start_dim=1)
-
         # Split the result into mu and var components
         # of the latent Gaussian distribution
         z2_mu = self.z2_mu(result)
@@ -213,6 +217,6 @@ class VGPAE(BaseVAE):
         p_z2z1 = MultivariateNormal(loc=z2_mu.T, covariance_matrix=kernel)
         log_p_z2z1 = p_z2z1.log_prob(z2.T).sum()
 
-        loss = recons_loss - kld_weight*(entropy_z2 + entropy_z1 + log_p_z1 + log_p_z2z1)
+        loss = recons_loss - kld_weight * (entropy_z2 + entropy_z1 + log_p_z1 + log_p_z2z1)
         return {'loss': loss, 'Reconstruction_Loss': recons_loss, 'entropy_z2': entropy_z2, 'entropy_z1': entropy_z1,
                 'log_pz1': log_p_z1, 'log_pz2z1': log_p_z2z1}

@@ -39,14 +39,14 @@ def get_dataloader(dataset, bs_train, shuffle=True):
         return dataloader
 
 
-def train(model, train_loader, epochs, device, fn):
+def train(model, train_loader, epochs, device, fn, w):
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     for epoch in range(1, epochs + 1):
         for batch_idx, (data, target) in enumerate(train_loader):
             data = data.to(device, dtype=torch.float32)
             optimizer.zero_grad()
             output = model(data)
-            loss = model.loss_function(data, *output, M_N=100.0)
+            loss = model.loss_function(data, *output, M_N=w)
             loss['loss'].backward()
             optimizer.step()
 
