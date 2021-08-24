@@ -12,7 +12,7 @@ def get_dataloader(dataset, bs_train, shuffle=True):
                                           transform=torchvision.transforms.Compose([
                                               torchvision.transforms.ToTensor(),
                                               torchvision.transforms.Normalize(
-                                                  (0.1307,), (0.3081,))
+                                                  (0.5,), (0.5,))
                                           ]))
         subset = list(range(0, bs_train))
         trainset = torch.utils.data.Subset(data, subset)
@@ -51,7 +51,7 @@ def train(model, train_loader, epochs, device, fn, w):
             optimizer.step()
 
         if epoch % epochs == 0:
-            torch.save(model.state_dict(), 'models/' + fn + '_w100_'
+            torch.save(model.state_dict(), 'models/' + fn + '_w'+ str(w) + '_'
                        + str(epoch) + '.pth')
 
         print("Epoch: {ep}, Loss: {Loss}, Recon_Loss: {rLoss}, 'entropy_z2': {entropy_z2}, 'entropy_z1': {entropy_z1}, "
@@ -78,9 +78,9 @@ def backtrans(img, mu_std=None):
             img_new = mu[0] + std[0] * img
         else:
             img_new = torch.zeros_like(img)
-            img_new[:, 0, :, :] = img[:, 0, :, :] * std[0] + mean[0]
-            img_new[:, 1, :, :] = img[:, 1, :, :] * std[1] + mean[1]
-            img_new[:, 2, :, :] = img[:, 2, :, :] * std[2] + mean[2]
+            img_new[:, 0, :, :] = img[:, 0, :, :] * std[0] + mu[0]
+            img_new[:, 1, :, :] = img[:, 1, :, :] * std[1] + mu[1]
+            img_new[:, 2, :, :] = img[:, 2, :, :] * std[2] + mu[2]
     return img_new
 
 
