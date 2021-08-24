@@ -49,6 +49,7 @@ if __name__ == '__main__':
     model = VGPAE.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=28,init_para=[0.1, 1, 1])
     # model = VGPAE_td.VGPAEtd(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=28)
 
+    # modify name
     file_name = args.dataset + '_' + model.__class__.__name__ + '_' + \
                 str(args.latent_dim1) + '_' + str(args.latent_dim2)
 
