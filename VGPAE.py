@@ -89,9 +89,9 @@ class VGPAE(BaseVAE):
         # initialization
         if init_para is None:
             init_para = [1, 1, 1]
-        noise_init = init_para[0] + torch.randn(latent_dim2) * 0.2
-        output_init = init_para[1] + torch.randn(latent_dim2) * 0.2
-        length_init = init_para[2] + torch.randn(latent_dim1) * 0.2
+        noise_init = init_para[0] + torch.randn(latent_dim2) * 0.1
+        output_init = init_para[1] + torch.randn(latent_dim2) * 0.1
+        length_init = init_para[2] + torch.randn(latent_dim1) * 0.1
         self.covar_module.initialize(outputscale=output_init)
         self.noise_initialize(noise_init)
         self.covar_module.base_kernel.initialize(lengthscale=length_init)
@@ -213,9 +213,46 @@ class VGPAE(BaseVAE):
         noise = sig_y.view(-1, 1, 1) * batch_eye
         kernel = self.covar_module(z1, z1).evaluate() + noise
 
-        p_z2z1 = MultivariateNormal(loc=z2_mu.T, covariance_matrix=kernel)
+        p_z2z1 = MultivariateNormal(loc=torch.zeros_like(z2_mu.T), covariance_matrix=kernel)
         log_p_z2z1 = p_z2z1.log_prob(z2.T).sum()
 
         loss = recons_loss - kld_weight * (entropy_z2 + entropy_z1 + log_p_z1 + log_p_z2z1)
-        return {'loss': loss, 'Reconstruction_Loss': recons_loss, 'entropy_z2': entropy_z2, 'entropy_z1': entropy_z1,
-                'log_pz1': log_p_z1, 'log_pz2z1': log_p_z2z1}
+        return loss, recons_loss, entropy_z2, entropy_z1, log_p_z1, log_p_z2z1
+
+    def loss_function_kl(self, input, *args,
+                      **kwargs):
+        """
+        Computes the VAE loss function.
+        KL(N(\mu, \sigma), N(0, 1))
+        :param input:
+        :param args:
+        :param kwargs:
+        :return:
+        """
+
+        input = input
+        recons, z2, z2_mu, log_z2_var, z1, z1_mu, log_z1_var = args
+        kld_weight = kwargs['M_N']  # Account for the minibatch samples from the dataset
+
+        recons_loss = F.mse_loss(recons, input, reduction='sum')
+
+        q_z1 = Independent(Normal(loc=z1_mu, scale=torch.exp(0.5 * log_z1_var)),
+                           reinterpreted_batch_ndims=1)
+        p_z1 = Independent(Normal(loc=torch.zeros_like(z1_mu), scale=torch.ones_like(log_z1_var)),
+                           reinterpreted_batch_ndims=1)
+        kl_z1 = kl_divergence(q_z1, p_z1).sum()
+
+        q_z2 = MultivariateNormal(loc=z2_mu.T, scale_tril=torch.diag_embed(torch.exp(0.5 * log_z2_var.T)))
+
+        n_x = len(input)
+        sig_y = self.noise.clone()
+        eye = torch.eye(n_x, device=input.device)
+        batch_eye = eye.expand(self.latent_dim2, n_x, n_x).clone()
+        noise = sig_y.view(-1, 1, 1) * batch_eye
+        kernel = self.covar_module(z1, z1).evaluate() + noise
+        p_z2z1 = MultivariateNormal(loc=torch.zeros_like(z2_mu.T), covariance_matrix=kernel)
+
+        kl_z2 = kl_divergence(q_z2, p_z2z1).sum()
+
+        loss = recons_loss + kld_weight * (kl_z1 + kl_z2)
+        return loss, recons_loss, kl_z2, kl_z1

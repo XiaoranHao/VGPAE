@@ -39,28 +39,34 @@ def get_dataloader(dataset, bs_train, shuffle=True):
         return dataloader
 
 
-def train(model, train_loader, epochs, device, fn, w):
+def train(model, train_loader, epochs, device, fn, w_, loss_fun, warm_up=False, log_interval=10):
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
+    if warm_up:
+        wu_epoch = 200
+        w_ls = torch.ones(epochs) * w_
+        w_wu = torch.linspace(0, w_, wu_epoch)
+        w_ls[:wu_epoch] = w_wu
+        fn = fn + 'wu'
+    else:
+        w_ls = torch.ones(epochs) * w_
+
     for epoch in range(1, epochs + 1):
+        w = w_ls[epoch-1]
         for batch_idx, (data, target) in enumerate(train_loader):
             data = data.to(device, dtype=torch.float32)
             optimizer.zero_grad()
             output = model(data)
-            loss = model.loss_function(data, *output, M_N=w)
-            loss['loss'].backward()
+            loss = loss_fun(data, *output, M_N=w)
+            loss[0].backward()
             optimizer.step()
-
-        if epoch % epochs == 0:
-            torch.save(model.state_dict(), 'models/' + fn + '_w'+ str(w) + '_'
-                       + str(epoch) + '.pth')
-
-        print("Epoch: {ep}, Loss: {Loss}, Recon_Loss: {rLoss}, 'entropy_z2': {entropy_z2}, 'entropy_z1': {entropy_z1}, "
-              "'log_pz1': {log_p_z1}, 'log_pz2z1': {log_p_z2z1}".format(ep=epoch, Loss=loss['loss'].item(),
-                                                                        rLoss=loss['Reconstruction_Loss'].item(),
-                                                                        entropy_z2=loss['entropy_z2'].item(),
-                                                                        entropy_z1=loss['entropy_z1'].item(),
-                                                                        log_p_z1=loss['log_pz1'].item(),
-                                                                        log_p_z2z1=loss['log_pz2z1'].item()))
+            if epoch % log_interval == 0:
+                if loss_fun.__name__ == 'loss_function':
+                    print(f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, entropy_z2: {loss[2].item()},"
+                      f"entropy_z1: {loss[3].item()}, log_pz1:{loss[4].item()}, log_pz2z1:{loss[5].item()}")
+                else:
+                    print(f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},"
+                          f"'kl_z1': {loss[3].item()}")
+    torch.save(model.state_dict(), 'models/' + fn + '_w' + str(w_) + '_' + loss_fun.__name__ + '_' + str(epochs) + '.pth')
 
 
 def backtrans(img, mu_std=None):
