@@ -42,7 +42,7 @@ def get_dataloader(dataset, bs_train, shuffle=True):
 def train(model, train_loader, epochs, device, fn, w_, loss_fun, warm_up=False, log_interval=10):
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     if warm_up:
-        wu_epoch = 200
+        wu_epoch = 500
         w_ls = torch.ones(epochs) * w_
         w_wu = torch.linspace(0, w_, wu_epoch)
         w_ls[:wu_epoch] = w_wu

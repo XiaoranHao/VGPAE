@@ -89,7 +89,7 @@ class VGPAE(BaseVAE):
         # initialization
         if init_para is None:
             init_para = [1, 1, 1]
-        noise_init = init_para[0] + torch.randn(latent_dim2) * 0.1
+        noise_init = init_para[0] + torch.randn(latent_dim2) * 0.01
         output_init = init_para[1] + torch.randn(latent_dim2) * 0.1
         length_init = init_para[2] + torch.randn(latent_dim1) * 0.1
         self.covar_module.initialize(outputscale=output_init)

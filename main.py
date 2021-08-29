@@ -49,10 +49,13 @@ activFun = activations_list[args.actif]
 
 if __name__ == '__main__':
     train_loader = get_dataloader(args.dataset, args.batch_size)
-
+    if args.dataset == 'MNIST':
+        img_size = 28
+    else:
+        img_size = 64
     # initialize model
     in_channel = 1
-    model = VGPAE.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=28, init_para=[0.1, 1, 1])
+    model = VGPAE.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size, init_para=[0.1, 1, 1])
     # model = VGPAE_td.VGPAEtd(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=28, init_para=[0.2, 1, 1])
 
     # modify name
