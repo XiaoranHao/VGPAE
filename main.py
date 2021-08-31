@@ -25,6 +25,8 @@ parser.add_argument('--kl', action='store_true', default=False,
                     help='KL loss')
 parser.add_argument('--annealing', action='store_true', default=False,
                     help='KL annealing')
+parser.add_argument('--fixgp', action='store_true', default=False,
+                    help='fix gp parameters')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -69,5 +71,5 @@ if __name__ == '__main__':
         loss_fun = model.loss_function
 
     start_time = time.time()
-    train(model, train_loader, args.epochs, device, file_name, args.weight, loss_fun, args.annealing)
+    train(model, train_loader, args.epochs, device, file_name, args.seed, args.weight, loss_fun, args.annealing, args.fixgp)
     print('training time elapsed {}s'.format(time.time() - start_time))

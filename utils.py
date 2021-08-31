@@ -39,8 +39,16 @@ def get_dataloader(dataset, bs_train, shuffle=True):
         return dataloader
 
 
-def train(model, train_loader, epochs, device, fn, w_, loss_fun, warm_up=False, log_interval=10):
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
+def train(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_up=False, fix_param=False,  log_interval=10):
+    if fix_param:
+        model.raw_noise.requires_grad = False
+        model.covar_module.raw_outputscale.requires_grad = False
+        model.covar_module.base_kernel.raw_lengthscale.requires_grad = False
+        optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
+        fn = fn + 'fix'
+        print(model.noise, model.covar_module.outputscale, model.covar_module.base_kernel.lengthscale)
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     if warm_up:
         wu_epoch = 500
         w_ls = torch.ones(epochs) * w_
@@ -66,7 +74,7 @@ def train(model, train_loader, epochs, device, fn, w_, loss_fun, warm_up=False, 
                 else:
                     print(f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},"
                           f"'kl_z1': {loss[3].item()}")
-    torch.save(model.state_dict(), 'models/' + fn + '_w' + str(w_) + '_' + loss_fun.__name__ + '_' + str(epochs) + '.pth')
+    torch.save(model.state_dict(), 'models/' + fn + '_w' + str(w_) + '_' + loss_fun.__name__ + '_' + str(epochs) + '_' + str(seed) + '.pth')
 
 
 def backtrans(img, mu_std=None):
