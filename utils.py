@@ -40,15 +40,16 @@ def get_dataloader(dataset, bs_train, shuffle=True):
 
 
 def train(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_up=False, fix_param=False,  log_interval=10):
+    N = train_loader.dataset.__len__()
+    N_batch = train_loader.batch_size
     if fix_param:
         model.raw_noise.requires_grad = False
         model.covar_module.raw_outputscale.requires_grad = False
         model.covar_module.base_kernel.raw_lengthscale.requires_grad = False
         optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
         fn = fn + 'fix'
-        print(model.noise, model.covar_module.outputscale, model.covar_module.base_kernel.lengthscale)
     else:
-        optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
+        optimizer = torch.optim.Adam(model.parameters(), lr=5e-5)
     if warm_up:
         wu_epoch = 500
         w_ls = torch.ones(epochs) * w_
@@ -61,11 +62,16 @@ def train(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_up=F
     for epoch in range(1, epochs + 1):
         w = w_ls[epoch-1]
         for batch_idx, (data, target) in enumerate(train_loader):
-            data = data.to(device, dtype=torch.float32)
+            data = data.to(device, dtype=torch.float64)
             optimizer.zero_grad()
             output = model(data)
-            loss = loss_fun(data, *output, M_N=w)
+            if loss_fun.__name__ == 'loss_function_kl_minibatch':
+                loss = loss_fun(data, N, N_batch, *output, M_N=w)
+            else:
+                loss = loss_fun(data, *output, M_N=w)
             loss[0].backward()
+            # for name, param in model.named_parameters():
+            #     print(name, torch.isfinite(param.grad).all())
             optimizer.step()
             if epoch % log_interval == 0:
                 if loss_fun.__name__ == 'loss_function':
