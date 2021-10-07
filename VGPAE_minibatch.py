@@ -90,11 +90,11 @@ class VGPAE(BaseVAE):
         # register parameters
         self.register_parameter(name="raw_noise", param=torch.nn.Parameter(torch.zeros(latent_dim2)))
 
-        self.register_parameter(name="variational_input", param=torch.nn.Parameter(5*torch.randn(n_ip, latent_dim1)))
-        self.register_parameter(name="variational_mean", param=torch.nn.Parameter(torch.randn(latent_dim2, n_ip)))
+        self.register_parameter(name="variational_input", param=torch.nn.Parameter(torch.randn(n_ip, latent_dim1)))
+        self.register_parameter(name="variational_mean", param=torch.nn.Parameter(0.1*torch.randn(latent_dim2, n_ip)))
 
         # self.register_parameter(name="variational_cov_log_diag", param=torch.nn.Parameter(torch.randn(latent_dim2, n_ip)))
-        self.register_parameter(name="variational_cov", param=torch.nn.Parameter(torch.randn(latent_dim2, n_ip, n_ip)))
+        self.register_parameter(name="variational_cov", param=torch.nn.Parameter(0.01*torch.randn(latent_dim2, n_ip, n_ip)))
 
         # initialization
         if init_para is None:
@@ -283,7 +283,6 @@ class VGPAE(BaseVAE):
         :param kwargs:
         :return:
         """
-        print('AA')
         recons, z2, z2_mu, log_z2_var, z1, z1_mu, log_z1_var = args
         kld_weight = kwargs['M_N']  # Account for the minibatch samples from the dataset
 
@@ -303,11 +302,11 @@ class VGPAE(BaseVAE):
         z2_mu, log_z2_var, z1, N, N_hat = args
 
         Knn = self.covar_module(z1, z1)
-        Knn = Knn.add_jitter(1e-6)
+        Knn = Knn.add_jitter(1e-5)
         Knm = self.covar_module(z1, self.variational_input)
         Kmn = Knm.transpose(-1, -2)
         Kmm = self.covar_module(self.variational_input, self.variational_input)
-        Kmm = Kmm.add_jitter(1e-6)
+        Kmm = Kmm.add_jitter(1e-5)
 
         noise = self.noise.clone()
         diff = (Kmm.inv_matmul(self.variational_mean.unsqueeze(-1), Knm.evaluate()).squeeze(-1) - z2_mu.T)
@@ -321,25 +320,23 @@ class VGPAE(BaseVAE):
         E = log_z2_var.sum()
 
         F = 0.5 * N * noise.log().sum() - 0.5 * N
-        q_ind = MultivariateNormal(loc=self.variational_mean, covariance_matrix=self.variational_covar)
-        p_prior = MultivariateNormal(loc=torch.zeros_like(self.variational_mean), covariance_matrix=Kmm.evaluate())
+        # q_ind = MultivariateNormal(loc=self.variational_mean, covariance_matrix=self.variational_covar)
+        # p_prior = MultivariateNormal(loc=torch.zeros_like(self.variational_mean), covariance_matrix=Kmm.evaluate())
 
         # Compute kld_qu_pu
         tr1 = Kmm.inv_matmul(self.variational_covar).diagonal(dim1=-1, dim2=-2).sum()
         qf1,  logdetK = Kmm.inv_quad_logdet(inv_quad_rhs=self.variational_mean.unsqueeze(-1), logdet=True, reduce_inv_quad=True)
         LH = torch.cholesky(self.variational_covar)
         logdetH = 2 * torch.sum(torch.log(torch.diagonal(LH, dim1=-1, dim2=-2)))
-        kld_qu_pu = 0.5 * (tr1 + qf1 - self.latent_dim2 * self.n_ip + logdetK - logdetH)
-        print(kld_qu_pu)
-        print(tr1)
-        print(qf1)
-        print(logdetK - logdetH)
+        kld_qu_pu = 0.5 * (tr1 + qf1 - self.latent_dim2 * self.n_ip + logdetK - logdetH).sum()
+        # print(tr1)
+        # print(qf1)
+        # print(logdetK - logdetH)
 
-
-        print('pass')
-        # print(kl_divergence(q_ind, p_prior))
         # print('pass2')
         # kl_inducing = kl_divergence(q_ind, p_prior).sum()
+        # print( kld_qu_pu.sum())
+        # print( kl_inducing )
         # print('pass3')
-        return 0.5 * N / N_hat *(A+B+C+D-E) + F + kld_qu_pu.sum()
+        return 0.5 * N / N_hat *(A+B+C+D-E) + F + kld_qu_pu
 

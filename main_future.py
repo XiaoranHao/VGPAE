@@ -2,8 +2,8 @@ import time
 import argparse
 import torch
 import VGPAE
-import VAE
-from utils import get_dataloader, train, train_VAE
+import VGPAE_td
+from utils import get_dataloader, train
 from torch import nn
 
 parser = argparse.ArgumentParser(description='VGPAE Experiment')
@@ -50,16 +50,15 @@ activFun = activations_list[args.actif]
 #     batch_size=args.batch_size, shuffle=True, **kwargs)
 
 if __name__ == '__main__':
-    train_loader, ds = get_dataloader(args.dataset, args.batch_size)
+    train_loader, ds = get_dataloader(args.dataset, args.batch_size, future_predict=True)
     if args.dataset == 'MNIST':
         img_size = 28
     else:
         img_size = 64
     # initialize model
     in_channel = 1
-    # model = VGPAE.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size, init_para=[0.1, 1, 1])
-    model = VAE.VAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size)
-
+    model = VGPAE.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size, init_para=[0.1, 1, 1])
+    # model = VGPAE_td.VGPAEtd(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=28, init_para=[0.2, 1, 1])
     # modify name
     file_name = args.dataset + '_' + model.__class__.__name__ + '_' + \
                 str(args.latent_dim1) + '_' + str(args.latent_dim2)
@@ -71,7 +70,6 @@ if __name__ == '__main__':
         loss_fun = model.loss_function
 
     start_time = time.time()
-    # train(model, train_loader, args.epochs, device, file_name, args.seed, args.weight, loss_fun, args.annealing, args.fixgp)
-    train_VAE(model, train_loader, args.epochs, device, file_name, args.seed, args.weight, loss_fun, args.annealing)
-
+    train(model, train_loader, args.epochs, device, file_name, args.seed, args.weight, loss_fun, args.annealing,
+          args.fixgp, future_predict=True, ds=ds)
     print('training time elapsed {}s'.format(time.time() - start_time))

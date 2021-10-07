@@ -6,13 +6,13 @@ import VGPAE_minibatch
 from utils import get_dataloader, train
 from torch import nn
 torch.set_default_dtype(torch.float64)
-
+torch.autograd.set_detect_anomaly(True)
 parser = argparse.ArgumentParser(description='VGPAE Experiment')
 parser.add_argument('--batch-size', type=int, default=256, metavar='N',
-                    help='input batch size for training (default: 1000)')
+                    help='input batch size for training (default: 256)')
 parser.add_argument('--epochs', type=int, default=3000, metavar='N',
                     help='number of epochs to train (default: 3000)')
-parser.add_argument('--dataset', type=str, default='MNIST',
+parser.add_argument('--dataset', type=str, default='1',
                     help='dataset (default: letter A)')
 parser.add_argument('--actif', type=str, default='lrelu', metavar='Activation',
                     help='activation function (default: LeakyRelu)')
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         img_size = 64
     # initialize model
     in_channel = 1
-    model = VGPAE_minibatch.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size, init_para=[0.1, 1, 1])
+    model = VGPAE_minibatch.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size, init_para=[1, 1, 1])
 
     # model = VGPAE_td.VGPAEtd(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=28, init_para=[0.2, 1, 1])
 
