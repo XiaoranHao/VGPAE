@@ -54,8 +54,8 @@ def get_dataloader(dataset, bs_train, shuffle=True, future_predict=False):
         # 1 2 3 ... 26 represent A B C ..Z
         if len(dataset) == 1:
             dataset = '0' + dataset
-        # data_root = 'mixedletter/character' + dataset
-        data_root = 'Latin/character' + dataset
+        data_root = 'mixedletter/character' + dataset
+        # data_root = 'Latin/character' + dataset
         transform = transforms.Compose([transforms.ToTensor(),
                                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                                         torchvision.transforms.Grayscale()
@@ -127,7 +127,7 @@ def train(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_up=F
                             f"'kl_z1': {loss[3].item()}")
         else:
             time_limit = 50
-            time_step = 1
+            time_step = 5
             for batch_idx, (data, target, idx) in enumerate(train_loader):
                 data = data.to(device, dtype=torch.float32)
                 optimizer.zero_grad()
