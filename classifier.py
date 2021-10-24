@@ -6,27 +6,21 @@ import numpy as np
 
 import torch.optim as optim
 from torch.utils.data.dataloader import DataLoader
-from torch.autograd import Variable
 
-from data.parser import parse_mnist
-from data.dataset import MNISTDataset
-from data.transforms import MNISTTransform
-from model import ModelMLP, ModelCNN
 
 class Config(object):
 
     def __init__(self):
 
         self.mode = 'cnn'  # 'cnn' or 'mlp'
-        self.parse_seed = 9999
         self.torch_seed = 9372
 
-        self.mnist_path = '/home/khshim/data/mnist/'
+        self.mnist_path = './'
         self.save_path = './best_model_' + self.mode + '.pt'
         self.num_valid = 10000
-        self.batch_size = 200
+        self.batch_size = 256
         self.eval_batch_size = 1000
-        self.num_workers = 4
+        self.num_workers = 0
 
         self.max_epoch = 1000
         self.max_change = 4
@@ -54,7 +48,6 @@ class ModelCNN(nn.Module):
         h3 = F.dropout(h3, p=0.5, training=self.training)
         h4 = self.fc2(h3)
         return h4
-
 
 
 def train(model, optimizer, loader):
