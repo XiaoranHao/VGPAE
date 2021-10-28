@@ -47,9 +47,9 @@ def get_dataloader(dataset, bs_train, shuffle=True, future_predict=False):
                                           ]))
         subset = list(range(0, bs_train))
         trainset = torch.utils.data.Subset(data, subset)
-        dataloader = torch.utils.data.DataLoader(data, batch_size=bs_train, pin_memory=True,
+        dataloader = torch.utils.data.DataLoader(trainset, batch_size=bs_train, pin_memory=True,
                                                  shuffle=shuffle)
-        return dataloader
+        return dataloader, trainset
     else:
         # 1 2 3 ... 26 represent A B C ..Z
         if len(dataset) == 1:
@@ -87,7 +87,7 @@ def train(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_up=F
         optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
         fn = fn + 'fix'
     else:
-        optimizer = torch.optim.Adam(model.parameters(), lr=5e-5)
+        optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     if warm_up:
         wu_epoch = 500
         w_ls = torch.ones(epochs) * w_
@@ -118,9 +118,10 @@ def train(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_up=F
                 optimizer.step()
                 if epoch % log_interval == 0:
                     if loss_fun.__name__ == 'loss_function':
-                        print(
-                            f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, entropy_z2: {loss[2].item()},"
-                            f"entropy_z1: {loss[3].item()}, log_pz1:{loss[4].item()}, log_pz2z1:{loss[5].item()}")
+                        # print(
+                        #     f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, entropy_z2: {loss[2].item()},"
+                        #     f"entropy_z1: {loss[3].item()}, log_pz1:{loss[4].item()}, log_pz2z1:{loss[5].item()}")
+                        print(f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, kl_z2: {loss[2].item()}")
                     else:
                         print(
                             f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},"
@@ -186,8 +187,8 @@ def train_VAE(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_
                 optimizer.step()
             if epoch % log_interval == 0:
                 print(
-                    f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},"
-                    f"'kl_z1': {loss[3].item()}")
+                    f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},")
+                    # f"'kl_z1': {loss[3].item()}")
         else:
             time_limit = 50
             time_step = 1

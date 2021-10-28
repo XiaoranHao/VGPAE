@@ -1,4 +1,5 @@
 import torch
+import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 import time
@@ -11,7 +12,6 @@ from torch.utils.data.dataloader import DataLoader
 class Config(object):
 
     def __init__(self):
-
         self.mode = 'cnn'  # 'cnn' or 'mlp'
         self.torch_seed = 9372
 
@@ -27,8 +27,8 @@ class Config(object):
         self.max_patience = 5
 
         self.initial_lr = 0.001
-        
-        
+
+
 class ModelCNN(nn.Module):
 
     def __init__(self):
@@ -56,17 +56,17 @@ def train(model, optimizer, loader):
     acc_sum = 0
     for idx, (data, target) in enumerate(loader):
         data, target = data.cuda(), target.cuda()
-        data, target = Variable(data), Variable(target)
         optimizer.zero_grad()
         output = model(data)
         loss = F.cross_entropy(output, target)
-        loss_sum += loss.data[0]
         loss.backward()
         optimizer.step()
 
-        predict = output.data.max(1)[1]
-        acc = predict.eq(target.data).cpu().sum()
-        acc_sum += acc
+        with torch.no_grad():
+            loss_sum += loss.item()
+            predict = output.max(dim=1)[1]
+            acc = predict.eq(target).cpu().sum()
+            acc_sum += acc
     return loss_sum / len(loader), acc_sum / len(loader)
 
 
@@ -75,15 +75,14 @@ def evaluate(model, loader):
     loss_sum = 0
     acc_sum = 0
     for idx, (data, target) in enumerate(loader):
-        data, target = data.cuda(), target.cuda()
-        data, target = Variable(data, volatile=True), Variable(target, volatile=True)
-        output = model(data)
-        loss = F.cross_entropy(output, target)
-        loss_sum += loss.data[0]
-
-        predict = output.data.max(1)[1]
-        acc = predict.eq(target.data).cpu().sum()
-        acc_sum += acc
+        with torch.no_grad():
+            data, target = data.cuda(), target.cuda()
+            output = model(data)
+            loss = F.cross_entropy(output, target)
+            loss_sum += loss.item()
+            predict = output.max(dim=1)[1]
+            acc = predict.eq(target).cpu().sum()
+            acc_sum += acc
     return loss_sum / len(loader), acc_sum / len(loader)
 
 
@@ -91,30 +90,35 @@ def main(cfg):
     torch.manual_seed(cfg.torch_seed)
 
     """Prepare data"""
-    if cfg.mode == 'mlp':
-        train_data, train_label, valid_data, valid_label, test_data, test_label = parse_mnist(2, cfg.mnist_path, cfg.num_valid, cfg.parse_seed)
-    elif cfg.mode == 'cnn':
-        train_data, train_label, valid_data, valid_label, test_data, test_label = parse_mnist(4, cfg.mnist_path, cfg.num_valid, cfg.parse_seed)
+    if cfg.mode == 'cnn':
+        data = torchvision.datasets.MNIST('./', train=True, download=True,
+                                          transform=torchvision.transforms.Compose([
+                                              torchvision.transforms.ToTensor(),
+                                              torchvision.transforms.Normalize(
+                                                  (0.5,), (0.5,))
+                                          ]))
+        train_subset, val_subset = torch.utils.data.random_split(
+            data, [len(data) - cfg.num_valid, cfg.num_valid], generator=torch.Generator().manual_seed(1))
+        train_loader = DataLoader(dataset=train_subset, shuffle=True, pin_memory=True, batch_size=cfg.batch_size)
+        val_loader = DataLoader(dataset=val_subset, shuffle=True, pin_memory=True, batch_size=cfg.eval_batch_size)
+        data2 = torchvision.datasets.MNIST('./', train=False, download=True,
+                                           transform=torchvision.transforms.Compose([
+                                               torchvision.transforms.ToTensor(),
+                                               torchvision.transforms.Normalize(
+                                                   (0.5,), (0.5,))
+                                           ]))
+        test_loader = DataLoader(dataset=data2, shuffle=False, pin_memory=True, batch_size=cfg.eval_batch_size)
+
     else:
         raise ValueError('Not supported mode')
 
-    transform = MNISTTransform()
-    train_dataset = MNISTDataset(train_data, train_label, transform=transform)
-    valid_dataset = MNISTDataset(valid_data, valid_label, transform=transform)
-    test_dataset = MNISTDataset(test_data, test_label, transform=transform)
-    train_iter = DataLoader(train_dataset, cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
-    valid_iter = DataLoader(valid_dataset, cfg.eval_batch_size, shuffle=False, num_workers=cfg.num_workers)
-    test_iter = DataLoader(test_dataset, cfg.eval_batch_size, shuffle=False)
-
     """Set model"""
-    if cfg.mode == 'mlp':
-        model = ModelMLP()
-    elif cfg.mode == 'cnn':
+    if cfg.mode == 'cnn':
         model = ModelCNN()
     else:
         raise ValueError('Not supported mode')
 
-    model.cuda(device_id=0)
+    model.cuda()
     optimizer = optim.Adam(model.parameters(), cfg.initial_lr)
 
     """Train"""
@@ -141,8 +145,8 @@ def main(cfg):
         else:
             pass
 
-        train_loss, train_acc = train(model, optimizer, train_iter)
-        valid_loss, valid_acc = evaluate(model, valid_iter)
+        train_loss, train_acc = train(model, optimizer, train_loader)
+        valid_loss, valid_acc = evaluate(model, val_loader)
         print('...... Train loss, accuracy', train_loss, train_acc / cfg.batch_size)
         print('...... Valid loss, best loss, accuracy', valid_loss, best_valid_loss, valid_acc / cfg.eval_batch_size)
 
@@ -168,11 +172,11 @@ def main(cfg):
         end_time = time.time()
         print('...... Time:', end_time - start_time)
 
-    test_loss, test_acc = evaluate(model, test_iter)
+    test_loss, test_acc = evaluate(model, test_loader)
     print('...... Test loss, accuracy', test_loss, test_acc / cfg.eval_batch_size)
 
 
 if __name__ == '__main__':
-    from config import Config
+
     config = Config()
     main(config)

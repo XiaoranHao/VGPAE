@@ -1,7 +1,8 @@
 import time
 import argparse
 import torch
-import VGPAE
+import VGPAE_classifier
+import classifier
 import VAE
 from utils import get_dataloader, train, train_VAE
 from torch import nn
@@ -15,7 +16,7 @@ parser.add_argument('--dataset', type=str, default='MNIST',
                     help='dataset (default: letter A)')
 parser.add_argument('--actif', type=str, default='lrelu', metavar='Activation',
                     help='activation function (default: LeakyRelu)')
-parser.add_argument('--latent_dim1', type=int, default=2, metavar='N',
+parser.add_argument('--latent_dim1', type=int, default=10, metavar='N',
                     help='dimension of z1 space (default: 2)')
 parser.add_argument('--latent_dim2', type=int, default=2, metavar='N',
                     help='dimension of z2 space (default: 2)')
@@ -57,21 +58,24 @@ if __name__ == '__main__':
         img_size = 64
     # initialize model
     in_channel = 1
-    # model = VGPAE.VGPAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size, init_para=[0.1, 1, 1])
-    model = VAE.VAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size)
+    enc = classifier.ModelCNN()
+    enc.load_state_dict(torch.load('best_model_cnn.pt'))
+    enc.eval()
+    model = VGPAE_classifier.VGPAE_v2(in_channel, args.latent_dim1, args.latent_dim2, activFun, enc, img_size=img_size,init_para=[0.5,5,15])
+    # model = VAE.VAE(in_channel, args.latent_dim1, args.latent_dim2, activFun, img_size=img_size)
 
     # modify name
     file_name = args.dataset + '_' + model.__class__.__name__ + '_' + \
                 str(args.latent_dim1) + '_' + str(args.latent_dim2)
 
     model = model.to(device)
-    if args.kl:
-        loss_fun = model.loss_function_kl
-    else:
-        loss_fun = model.loss_function
+    # if args.kl:
+    #     loss_fun = model.loss_function_kl
+    # else:
+    loss_fun = model.loss_function
 
     start_time = time.time()
-    # train(model, train_loader, args.epochs, device, file_name, args.seed, args.weight, loss_fun, args.annealing, args.fixgp)
-    train_VAE(model, train_loader, args.epochs, device, file_name, args.seed, args.weight, loss_fun, args.annealing)
+    train(model, train_loader, args.epochs, device, file_name, args.seed, args.weight, loss_fun, args.annealing, args.fixgp)
+    # train_VAE(model, train_loader, args.epochs, device, file_name, args.seed, args.weight, loss_fun, args.annealing)
 
     print('training time elapsed {}s'.format(time.time() - start_time))
