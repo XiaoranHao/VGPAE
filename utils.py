@@ -11,13 +11,11 @@ class MyDataset(torchvision.datasets.ImageFolder):
         super(MyDataset, self).__init__(root, transform)
 
     def __getitem__(self, index):
-
         """
         Args:
             index (int): Index
-
         Returns:
-            tuple: (sample, target) where target is class_index of the target class.
+            tuple: (sample, target, index) where target is class_index of the target class.
 
         """
         path, target = self.samples[index]
@@ -26,7 +24,6 @@ class MyDataset(torchvision.datasets.ImageFolder):
             sample = self.transform(sample)
         if self.target_transform is not None:
             target = self.target_transform(target)
-
         return sample, target, index
 
 
@@ -47,6 +44,7 @@ def get_dataloader(dataset, bs_train, shuffle=True, future_predict=False):
                                           ]))
         subset = list(range(0, bs_train))
         trainset = torch.utils.data.Subset(data, subset)
+        # trainset = data
         dataloader = torch.utils.data.DataLoader(trainset, batch_size=bs_train, pin_memory=True,
                                                  shuffle=shuffle)
         return dataloader, trainset
@@ -76,146 +74,49 @@ def get_dataloader(dataset, bs_train, shuffle=True, future_predict=False):
         return train_loader, ds
 
 
-def train(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_up=False, fix_param=False,
-          future_predict=False, ds=None, log_interval=10):
-    N = train_loader.dataset.__len__()
-    N_batch = train_loader.batch_size
-    if fix_param:
-        model.raw_noise.requires_grad = False
-        model.covar_module.raw_outputscale.requires_grad = False
-        model.covar_module.base_kernel.raw_lengthscale.requires_grad = False
-        optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
-        fn = fn + 'fix'
-    else:
-        optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
-    if warm_up:
-        wu_epoch = 500
-        w_ls = torch.ones(epochs) * w_
-        w_wu = torch.linspace(0, w_, wu_epoch)
-        w_ls[:wu_epoch] = w_wu
-        fn = fn + 'wu'
-    else:
-        w_ls = torch.ones(epochs) * w_
+class Binarize(object):
+    """ This class introduces a binarization transformation
+    """
 
-    for epoch in range(1, epochs + 1):
-        w = w_ls[epoch - 1]
-        if not future_predict:
-            for batch_idx, (data, target) in enumerate(train_loader):
-                if loss_fun.__name__ == 'loss_function_kl_minibatch':
-                    data = data.to(device, dtype=torch.float64)
-                    optimizer.zero_grad()
-                    output = model(data)
-                    loss = loss_fun(data, N, N_batch, *output, M_N=w)
-                else:
-                    data = data.to(device, dtype=torch.float32)
-                    optimizer.zero_grad()
-                    output = model(data)
-                    loss = loss_fun(data, *output, M_N=w)
+    def __call__(self, pic):
+        return torch.Tensor(pic.size()).bernoulli_(pic)
 
-                loss[0].backward()
-                # for name, param in model.named_parameters():
-                #     print(name, torch.isfinite(param.grad).all())
-                optimizer.step()
-                if epoch % log_interval == 0:
-                    if loss_fun.__name__ == 'loss_function':
-                        # print(
-                        #     f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, entropy_z2: {loss[2].item()},"
-                        #     f"entropy_z1: {loss[3].item()}, log_pz1:{loss[4].item()}, log_pz2z1:{loss[5].item()}")
-                        print(f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, kl_z2: {loss[2].item()}")
-                    else:
-                        print(
-                            f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},"
-                            f"'kl_z1': {loss[3].item()}")
-        else:
-            time_limit = 50
-            time_step = 5
-            for batch_idx, (data, target, idx) in enumerate(train_loader):
-                data = data.to(device, dtype=torch.float32)
-                optimizer.zero_grad()
-                output = model(data)
-                del data
-                # future data
-                div, mod_future = find_future(idx, time_step, time_limit)
-                idx_target = div * time_limit + mod_future
-                target_list = list(idx_target)
-                target_img = torch.utils.data.Subset(ds, target_list)
-                trainloader_target = torch.utils.data.DataLoader(target_img, batch_size=N_batch, pin_memory=True,
-                                                                 shuffle=False)
-                target = next(iter(trainloader_target))[0].to(device, dtype=torch.float32)
-                loss = loss_fun(target, *output, M_N=w)
-                loss[0].backward()
-
-                optimizer.step()
-                if epoch % log_interval == 0:
-                    if loss_fun.__name__ == 'loss_function':
-                        print(
-                            f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, entropy_z2: {loss[2].item()},"
-                            f"entropy_z1: {loss[3].item()}, log_pz1:{loss[4].item()}, log_pz2z1:{loss[5].item()}")
-                    else:
-                        print(
-                            f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},"
-                            f"'kl_z1': {loss[3].item()}")
-
-    torch.save(model.state_dict(),
-               'models/' + fn + '_w' + str(w_) + '_' + loss_fun.__name__ + '_' + str(epochs) + '_' + str(seed) + '.pth')
+    def __repr__(self):
+        return self.__class__.__name__ + '()'
 
 
-def train_VAE(model, train_loader, epochs, device, fn, seed, w_, loss_fun, warm_up=False,
-          future_predict=False, ds=None, log_interval=10):
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
-    if warm_up:
-        wu_epoch = 500
-        w_ls = torch.ones(epochs) * w_
-        w_wu = torch.linspace(0, w_, wu_epoch)
-        w_ls[:wu_epoch] = w_wu
-        fn = fn + 'wu'
-    else:
-        w_ls = torch.ones(epochs) * w_
+def _data_transforms_mnist():
+    """Get data transforms for mnist."""
+    train_transform = transforms.Compose([
+        transforms.ToTensor(),
+        Binarize(),
+    ])
 
-    for epoch in range(1, epochs + 1):
-        w = w_ls[epoch - 1]
-        if not future_predict:
-            for batch_idx, (data, target) in enumerate(train_loader):
-                data = data.to(device, dtype=torch.float32)
-                optimizer.zero_grad()
-                output = model(data)
-                loss = loss_fun(data, *output, M_N=w)
+    valid_transform = transforms.Compose([
+        transforms.ToTensor(),
+        Binarize(),
 
-                loss[0].backward()
-                # for name, param in model.named_parameters():
-                #     print(name, torch.isfinite(param.grad).all())
-                optimizer.step()
-            if epoch % log_interval == 0:
-                print(
-                    f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},")
-                    # f"'kl_z1': {loss[3].item()}")
-        else:
-            time_limit = 50
-            time_step = 1
-            for batch_idx, (data, target, idx) in enumerate(train_loader):
-                data = data.to(device, dtype=torch.float32)
-                optimizer.zero_grad()
-                output = model(data)
-                del data
-                # future data
-                div, mod_future = find_future(idx, time_step, time_limit)
-                idx_target = div * time_limit + mod_future
-                target_list = list(idx_target)
-                target_img = torch.utils.data.Subset(ds, target_list)
-                trainloader_target = torch.utils.data.DataLoader(target_img, batch_size=N_batch, pin_memory=True,
-                                                                 shuffle=False)
-                target = next(iter(trainloader_target))[0].to(device, dtype=torch.float32)
-                loss = loss_fun(target, *output, M_N=w)
-                loss[0].backward()
+    ])
 
-                optimizer.step()
-                if epoch % log_interval == 0:
-                    print(
-                        f"Epoch: {epoch}, Loss: {loss[0].item()}, Recon_Loss: {loss[1].item()}, 'kl_z2': {loss[2].item()},"
-                        f"'kl_z1': {loss[3].item()}")
+    return train_transform, valid_transform
 
-    torch.save(model.state_dict(),
-               'models/' + fn + '_w' + str(w_) + '_' + loss_fun.__name__ + '_' + str(epochs) + '_' + str(seed) + '.pth')
+
+def get_data_transforms(dataset):
+    if dataset == 'MNIST':
+        return _data_transforms_mnist()
+
+
+def get_loaders(args):
+    train_transform, valid_transform = get_data_transforms(args.dataset)
+    if args.dataset == 'MNIST':
+        train_data = torchvision.datasets.MNIST(root=args.data, train=True, download=True, transform=train_transform)
+        test_data = torchvision.datasets.MNIST(root=args.data, train=False, download=True, transform=valid_transform)
+    # noinspection PyUnboundLocalVariable
+    train_queue = torch.utils.data.DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=8,
+                                              drop_last=True, pin_memory=True)
+    # noinspection PyUnboundLocalVariable
+    test_queue = torch.utils.data.DataLoader(test_data, batch_size=args.batch_size, pin_memory=False)
+    return train_queue, test_queue
 
 
 def backtrans(img, mu_std=None):
